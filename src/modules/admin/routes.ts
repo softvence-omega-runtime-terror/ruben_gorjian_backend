@@ -126,12 +126,12 @@ router.get("/users", async (req, res) => {
     ...(founder !== undefined ? { isFounder: founder === "true" } : {}),
     ...(search
       ? {
-          OR: [
-            { email: { contains: search, mode: "insensitive" as const } },
-            { name: { contains: search, mode: "insensitive" as const } },
-            { id: { contains: search, mode: "insensitive" as const } },
-          ],
-        }
+        OR: [
+          { email: { contains: search, mode: "insensitive" as const } },
+          { name: { contains: search, mode: "insensitive" as const } },
+          { id: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
       : {}),
     ...(plan ? { subscriptions: { some: { planCode: plan } } } : {}),
     ...(subscriptionStatus ? { subscriptions: { some: { status: subscriptionStatus } } } : {}),
@@ -431,14 +431,14 @@ router.put("/publishing-routing/global", async (req, res) => {
   const where =
     parsed.data.applyTo === "ALL_USERS"
       ? {
-          deletedAt: null as Date | null,
-          status: { not: "DELETED" as const },
-        }
+        deletedAt: null as Date | null,
+        status: { not: "DELETED" as const },
+      }
       : {
-          deletedAt: null as Date | null,
-          status: { not: "DELETED" as const },
-          role: "USER" as const,
-        };
+        deletedAt: null as Date | null,
+        status: { not: "DELETED" as const },
+        role: "USER" as const,
+      };
 
   const targetUsers = await prisma.user.findMany({
     where,

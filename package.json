@@ -1,3 +1,83 @@
+<<<<<<< HEAD
+{
+  "name": "talexia-backend",
+  "version": "1.0.0",
+  "description": "Talexia Backend",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts --exec \"ts-node --transpile-only src/index.ts\"",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "seed": "prisma db seed",
+    "test": "vitest run",
+    "test:social": "ts-node src/test-social.ts",
+    "upload-post:smoke": "ts-node -P tsconfig.scripts.json scripts/upload-post-smoke.ts",
+    "stripe:replace-plans": "ts-node -P tsconfig.scripts.json scripts/create-and-replace-stripe-plans.ts",
+    "stripe:yearly-prices": "ts-node -P tsconfig.scripts.json scripts/create-stripe-yearly-prices.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kizito25/talexia-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "bugs": {
+    "url": "https://github.com/Kizito25/talexia-backend/issues"
+  },
+  "homepage": "https://github.com/Kizito25/talexia-backend#readme",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.675.0",
+    "@aws-sdk/s3-request-presigner": "^3.675.0",
+    "@prisma/client": "^5.20.0",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^5.21.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.19",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "google-auth-library": "^10.5.0",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^6.9.16",
+    "openai": "^6.10.0",
+    "socket.io": "4.8.3",
+    "stripe": "^20.0.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.10.1",
+    "@types/nodemailer": "^7.0.4",
+    "nodemon": "^3.1.11",
+    "prisma": "^5.20.0",
+    "supertest": "^7.2.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.3"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
+}
+=======
 {
   "name": "talexia-backend",
   "version": "1.0.0",
@@ -80,3 +160,4 @@
     "seed": "ts-node prisma/seed.ts"
   }
 }
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd

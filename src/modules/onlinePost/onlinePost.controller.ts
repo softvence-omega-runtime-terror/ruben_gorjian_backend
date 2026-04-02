@@ -12,7 +12,7 @@ function firstQuery(value: unknown): string | undefined {
 }
 
 export class OnlinePostController {
-  constructor(private readonly onlinePostService = new SocialMediaService()) {}
+  constructor(private readonly onlinePostService = new SocialMediaService()) { }
 
   private parseMultipartPayload(raw: unknown): Record<string, unknown> {
     if (typeof raw !== "string" || !raw.trim()) return {};

@@ -1,24 +1,38 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 import {
+<<<<<<< HEAD
+=======
   Prisma,
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
   ScheduledPost,
   ScheduledPostStatus,
   SocialPlatform,
   User,
   Role as UserRole,
+<<<<<<< HEAD
+} from '@prisma/client';
+import { prisma } from '../../lib/prisma';
+import { ApiError } from '../../lib/errors';
+=======
 } from "@prisma/client";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "../../config/env";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../lib/errors";
-import { Upload } from "@aws-sdk/lib-storage";
-import { PassThrough } from "stream";
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
 // Minimal Nest-like exceptions so the original pasted logic can remain unchanged in Express.
 // Express routes should use `handleError()` to convert these into proper HTTP responses.
 class BadRequestException extends ApiError {
   constructor(messageOrDetails: unknown) {
     const message =
+<<<<<<< HEAD
+      typeof messageOrDetails === 'string'
+        ? messageOrDetails
+        : (messageOrDetails as any)?.message ?? 'Bad Request';
+    super(400, message, typeof messageOrDetails === 'string' ? undefined : messageOrDetails);
+    this.name = 'BadRequestException';
+=======
       typeof messageOrDetails === "string"
         ? messageOrDetails
         : ((messageOrDetails as any)?.message ?? "Bad Request");
@@ -28,6 +42,7 @@ class BadRequestException extends ApiError {
       typeof messageOrDetails === "string" ? undefined : messageOrDetails,
     );
     this.name = "BadRequestException";
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
   }
   getResponse() {
     return this.details ?? { message: this.message };
@@ -37,6 +52,13 @@ class BadRequestException extends ApiError {
 class ForbiddenException extends ApiError {
   constructor(messageOrDetails: unknown) {
     const message =
+<<<<<<< HEAD
+      typeof messageOrDetails === 'string'
+        ? messageOrDetails
+        : (messageOrDetails as any)?.message ?? 'Forbidden';
+    super(403, message, typeof messageOrDetails === 'string' ? undefined : messageOrDetails);
+    this.name = 'ForbiddenException';
+=======
       typeof messageOrDetails === "string"
         ? messageOrDetails
         : ((messageOrDetails as any)?.message ?? "Forbidden");
@@ -46,12 +68,20 @@ class ForbiddenException extends ApiError {
       typeof messageOrDetails === "string" ? undefined : messageOrDetails,
     );
     this.name = "ForbiddenException";
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
   }
 }
 
 class NotFoundException extends ApiError {
   constructor(messageOrDetails: unknown) {
     const message =
+<<<<<<< HEAD
+      typeof messageOrDetails === 'string'
+        ? messageOrDetails
+        : (messageOrDetails as any)?.message ?? 'Not Found';
+    super(404, message, typeof messageOrDetails === 'string' ? undefined : messageOrDetails);
+    this.name = 'NotFoundException';
+=======
       typeof messageOrDetails === "string"
         ? messageOrDetails
         : ((messageOrDetails as any)?.message ?? "Not Found");
@@ -61,11 +91,14 @@ class NotFoundException extends ApiError {
       typeof messageOrDetails === "string" ? undefined : messageOrDetails,
     );
     this.name = "NotFoundException";
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
   }
 }
 
 export class SocialMediaService {
   private readonly prisma = prisma;
+<<<<<<< HEAD
+=======
   private readonly s3Client =
     env.S3_BUCKET &&
     env.AWS_REGION &&
@@ -79,6 +112,7 @@ export class SocialMediaService {
           },
         })
       : null;
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
   // Minimal ConfigService shim so existing logic stays the same in Express.
   private readonly configService = {
@@ -86,6 +120,11 @@ export class SocialMediaService {
       (process.env[name] as unknown as T | undefined) ?? undefined,
   };
 
+<<<<<<< HEAD
+  private readonly allowedPlatforms = ['facebook', 'instagram', 'linkedin'] as const;
+
+  private planLimits: Record<string, { maxLinkedPlatforms: number; monthlyScheduledPosts: number }> = {
+=======
   private readonly allowedPlatforms = [
     "facebook",
     "instagram",
@@ -96,6 +135,7 @@ export class SocialMediaService {
     string,
     { maxLinkedPlatforms: number; monthlyScheduledPosts: number }
   > = {
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
     FREE: { maxLinkedPlatforms: 1, monthlyScheduledPosts: 10 },
     DEFAULT: { maxLinkedPlatforms: 2, monthlyScheduledPosts: 30 },
     PRO: { maxLinkedPlatforms: 3, monthlyScheduledPosts: 200 },
@@ -111,7 +151,11 @@ export class SocialMediaService {
   }
 
   private authHeader(): string {
+<<<<<<< HEAD
+    const key = this.required('UPLOAD_POST_API_KEY');
+=======
     const key = this.required("UPLOAD_POST_API_KEY");
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
     if (/^apikey\s+/i.test(key) || /^bearer\s+/i.test(key)) {
       return key;
     }
@@ -119,6 +163,23 @@ export class SocialMediaService {
   }
 
   private resolveBaseUrl(): string {
+<<<<<<< HEAD
+    const raw = (this.configService.get<string>('UPLOAD_POST_BASE_URL') ?? '').trim();
+    if (!raw) return 'https://api.upload-post.com/api';
+
+    const normalized = raw.replace(/\/$/, '');
+
+    if (
+      normalized === 'https://upload-post.com' ||
+      normalized === 'https://www.upload-post.com' ||
+      normalized === 'https://api.upload-post.com' ||
+      normalized === 'https://www.api.upload-post.com'
+    ) {
+      return 'https://api.upload-post.com/api';
+    }
+
+    if (normalized.endsWith('/api')) return normalized;
+=======
     const raw = (
       this.configService.get<string>("UPLOAD_POST_BASE_URL") ?? ""
     ).trim();
@@ -136,10 +197,35 @@ export class SocialMediaService {
     }
 
     if (normalized.endsWith("/api")) return normalized;
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
     return normalized;
   }
 
+<<<<<<< HEAD
+  private normalizePlatform(platform: string): 'facebook' | 'instagram' | 'linkedin' {
+    const p = platform?.toLowerCase();
+    if (!p || !this.allowedPlatforms.includes(p as any)) {
+      throw new BadRequestException('platform must be one of: facebook, instagram, linkedin');
+    }
+    return p as 'facebook' | 'instagram' | 'linkedin';
+  }
+
+  private toPrismaPlatform(platform: 'facebook' | 'instagram' | 'linkedin'): SocialPlatform {
+    if (platform === 'facebook') return SocialPlatform.FACEBOOK;
+    if (platform === 'instagram') return SocialPlatform.INSTAGRAM;
+    return SocialPlatform.LINKEDIN;
+  }
+
+  private fromPrismaPlatform(platform: SocialPlatform): 'facebook' | 'instagram' | 'linkedin' {
+    if (platform === SocialPlatform.FACEBOOK) return 'facebook';
+    if (platform === SocialPlatform.INSTAGRAM) return 'instagram';
+    return 'linkedin';
+  }
+
+  private uploadPostUsername(user: User): string {
+    return user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_');
+=======
   private normalizePlatform(
     platform: string,
   ): "facebook" | "instagram" | "tiktok" {
@@ -170,11 +256,16 @@ export class SocialMediaService {
 
   private uploadPostUsername(user: User): string {
     return user.email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_");
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
   }
 
   private async api(path: string, init: RequestInit = {}) {
     const headers = new Headers(init.headers);
+<<<<<<< HEAD
+    headers.set('Authorization', this.authHeader());
+=======
     headers.set("Authorization", this.authHeader());
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
     const url = `${this.resolveBaseUrl()}${path}`;
     const response = await fetch(url, { ...init, headers });
@@ -190,7 +281,11 @@ export class SocialMediaService {
 
     if (!response.ok) {
       throw new BadRequestException({
+<<<<<<< HEAD
+        message: 'Upload Post API request failed',
+=======
         message: "Upload Post API request failed",
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
         requestUrl: url,
         statusCode: response.status,
         statusText: response.statusText,
@@ -206,13 +301,27 @@ export class SocialMediaService {
       where: { userId_platform: { userId, platform } },
     });
 
+<<<<<<< HEAD
+    if (!link) {
+      throw new ForbiddenException('User must login/connect this platform first via API');
+    }
+=======
     // if (!link) {
     //   throw new ForbiddenException('User must login/connect this platform first via API');
     // }
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
   }
 
   private async enforceLinkLimit(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
+<<<<<<< HEAD
+    if (!user) throw new NotFoundException('User not found');
+    const linked = await this.prisma.socialPlatformLink.count({ where: { userId } });
+    const socialPlan = String((user as any).socialPlan ?? 'FREE');
+    const limit = (this.planLimits[socialPlan] ?? this.planLimits.FREE).maxLinkedPlatforms;
+    if (linked >= limit) {
+      throw new ForbiddenException(`Plan limit reached. Max linked platforms for ${socialPlan}: ${limit}`);
+=======
     if (!user) throw new NotFoundException("User not found");
     const linked = await this.prisma.socialPlatformLink.count({
       where: { userId },
@@ -224,12 +333,17 @@ export class SocialMediaService {
       throw new ForbiddenException(
         `Plan limit reached. Max linked platforms for ${socialPlan}: ${limit}`,
       );
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
     }
   }
 
   private async enforceScheduleLimit(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
+<<<<<<< HEAD
+    if (!user) throw new NotFoundException('User not found');
+=======
     if (!user) throw new NotFoundException("User not found");
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -242,6 +356,12 @@ export class SocialMediaService {
       },
     });
 
+<<<<<<< HEAD
+    const socialPlan = String((user as any).socialPlan ?? 'FREE');
+    const limit = (this.planLimits[socialPlan] ?? this.planLimits.FREE).monthlyScheduledPosts;
+    if (total >= limit) {
+      throw new ForbiddenException(`Monthly schedule limit reached for ${socialPlan} plan: ${limit}`);
+=======
     const socialPlan = String((user as any).socialPlan ?? "FREE");
     const limit = (this.planLimits[socialPlan] ?? this.planLimits.FREE)
       .monthlyScheduledPosts;
@@ -249,6 +369,7 @@ export class SocialMediaService {
       throw new ForbiddenException(
         `Monthly schedule limit reached for ${socialPlan} plan: ${limit}`,
       );
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
     }
   }
 
@@ -260,6 +381,20 @@ export class SocialMediaService {
     return /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(url);
   }
 
+<<<<<<< HEAD
+  private extractExternalIds(result: unknown): { requestId?: string; jobId?: string } {
+    const obj = typeof result === 'object' && result ? (result as Record<string, unknown>) : {};
+    const requestId =
+      typeof obj.request_id === 'string'
+        ? obj.request_id
+        : typeof obj.requestId === 'string'
+          ? obj.requestId
+          : undefined;
+    const jobId =
+      typeof obj.job_id === 'string'
+        ? obj.job_id
+        : typeof obj.jobId === 'string'
+=======
   private extractExternalIds(result: unknown): {
     requestId?: string;
     jobId?: string;
@@ -278,6 +413,7 @@ export class SocialMediaService {
       typeof obj.job_id === "string"
         ? obj.job_id
         : typeof obj.jobId === "string"
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
           ? obj.jobId
           : undefined;
     return { requestId, jobId };
@@ -287,10 +423,14 @@ export class SocialMediaService {
     externalRef?: string;
     externalProfileUrl?: string;
   } {
+<<<<<<< HEAD
+    const obj = typeof result === 'object' && result ? (result as Record<string, unknown>) : {};
+=======
     const obj =
       typeof result === "object" && result
         ? (result as Record<string, unknown>)
         : {};
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
     const externalRefCandidates = [
       obj.request_id,
@@ -310,21 +450,30 @@ export class SocialMediaService {
       obj.permalink,
     ];
 
+<<<<<<< HEAD
+    const externalRef = externalRefCandidates.find((v) => typeof v === 'string') as string | undefined;
+    const externalProfileUrl = externalProfileUrlCandidates.find((v) => typeof v === 'string') as string | undefined;
+=======
     const externalRef = externalRefCandidates.find(
       (v) => typeof v === "string",
     ) as string | undefined;
     const externalProfileUrl = externalProfileUrlCandidates.find(
       (v) => typeof v === "string",
     ) as string | undefined;
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
     return { externalRef, externalProfileUrl };
   }
 
   private extractPostUrl(result: unknown): string | undefined {
+<<<<<<< HEAD
+    const obj = typeof result === 'object' && result ? (result as Record<string, unknown>) : {};
+=======
     const obj =
       typeof result === "object" && result
         ? (result as Record<string, unknown>)
         : {};
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
 
     const candidates = [
       obj.post_url,
@@ -337,6 +486,12 @@ export class SocialMediaService {
       obj.live_post_url,
     ];
 
+<<<<<<< HEAD
+    return candidates.find((v) => typeof v === 'string') as string | undefined;
+  }
+
+  private normalizeMediaUrls(mediaUrl?: string, mediaUrls?: string[]): string[] {
+=======
     return candidates.find((v) => typeof v === "string") as string | undefined;
   }
 
@@ -344,11 +499,16 @@ export class SocialMediaService {
     mediaUrl?: string,
     mediaUrls?: string[],
   ): string[] {
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
     const urls = [
       ...(Array.isArray(mediaUrls) ? mediaUrls : []),
       ...(mediaUrl ? [mediaUrl] : []),
     ]
+<<<<<<< HEAD
+      .map((u) => (u ?? '').trim())
+=======
       .map((u) => (u ?? "").trim())
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
       .filter(Boolean);
 
     return Array.from(new Set(urls));
@@ -359,7 +519,11 @@ export class SocialMediaService {
     const raw = stored.trim();
     if (!raw) return [];
 
+<<<<<<< HEAD
+    if (raw.startsWith('[')) {
+=======
     if (raw.startsWith("[")) {
+>>>>>>> 69614fc10aa539c6720f9e149fe53393ddf0bacd
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -373,152 +537,28 @@ export class SocialMediaService {
     return [raw];
   }
 
-  private normalizeBoolean(value: unknown, fallback = true): boolean {
-    if (typeof value === "boolean") return value;
-    if (typeof value === "string") {
-      const normalized = value.trim().toLowerCase();
-      if (["true", "1", "yes", "on"].includes(normalized)) return true;
-      if (["false", "0", "no", "off"].includes(normalized)) return false;
-    }
-    return fallback;
-  }
-
-  private sanitizeFilename(fileName: string): string {
-    const trimmed = fileName.trim();
-    if (!trimmed) return "upload";
-
-    return (
-      trimmed
-        .normalize("NFKD")
-        .replace(/[^a-zA-Z0-9._-]+/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 120) || "upload"
-    );
-  }
-
-  private buildStorageUrl(storageKey: string): string {
-    const baseUrl = env.STORAGE_BASE_URL?.trim();
-    if (!baseUrl) {
-      throw new BadRequestException(
-        "STORAGE_BASE_URL is required to publish uploaded files",
-      );
-    }
-    return `${baseUrl.replace(/\/+$/, "")}/${storageKey.replace(/^\/+/, "")}`;
-  }
-
-  // private async uploadMultipartFiles(
-  //   userId: string,
-  //   files: Express.Multer.File[],
-  // ): Promise<string[]> {
-  //   if (!files.length) return [];
-
-  //   if (!this.s3Client || !env.S3_BUCKET) {
-  //     throw new BadRequestException("S3 upload is not configured");
-  //   }
-
-  //   const uploadedUrls: string[] = [];
-
-  //   for (const file of files) {
-  //     const storageKey = `attachments/media/${Date.now()}_${userId}_${this.sanitizeFilename(file.originalname)}`;
-
-  //     await this.s3Client.send(
-  //       new PutObjectCommand({
-  //         Bucket: env.S3_BUCKET,
-  //         Key: storageKey,
-  //         Body: file.buffer,
-  //         ContentType: file.mimetype || "application/octet-stream",
-  //       }),
-  //     );
-
-  //     uploadedUrls.push(this.buildStorageUrl(storageKey));
-  //   }
-
-  //   return uploadedUrls;
-  // }
-
-  private async uploadMultipartFiles(
-    userId: string,
-    files: Express.Multer.File[],
-  ): Promise<string[]> {
-    if (!files.length) return [];
-
-    if (!this.s3Client || !env.S3_BUCKET) {
-      throw new BadRequestException("S3 upload is not configured");
-    }
-
-    const uploadedUrls: string[] = [];
-
-    for (const file of files) {
-      const storageKey = `attachments/media/${Date.now()}_${userId}_${this.sanitizeFilename(
-        file.originalname,
-      )}`;
-
-      if (file.mimetype.startsWith("video/")) {
-        // Video: upload as stream
-        const stream = new PassThrough();
-        stream.end(file.buffer); // convert buffer to stream
-
-        const upload = new Upload({
-          client: this.s3Client,
-          params: {
-            Bucket: env.S3_BUCKET,
-            Key: storageKey,
-            Body: stream,
-            ContentType: file.mimetype || "application/octet-stream",
-          },
-        });
-
-        await upload.done();
-      } else {
-        // Image: upload directly from buffer
-        await this.s3Client.send(
-          new PutObjectCommand({
-            Bucket: env.S3_BUCKET,
-            Key: storageKey,
-            Body: file.buffer,
-            ContentType: file.mimetype || "application/octet-stream",
-          }),
-        );
-      }
-
-      uploadedUrls.push(this.buildStorageUrl(storageKey));
-    }
-
-    return uploadedUrls;
-  }
-
   private async publishToProvider(payload: {
     username: string;
-    platform: "facebook" | "instagram" | "tiktok";
+    platform: 'facebook' | 'instagram' | 'linkedin';
     title: string;
     mediaUrl?: string;
     mediaUrls?: string[];
     asyncUpload?: boolean;
   }) {
-    const title = payload.title?.trim() || "Social media post";
+    const title = payload.title?.trim() || 'Social media post';
     const asyncUpload = payload.asyncUpload ?? true;
-    const mediaList = this.normalizeMediaUrls(
-      payload.mediaUrl,
-      payload.mediaUrls,
-    );
+    const mediaList = this.normalizeMediaUrls(payload.mediaUrl, payload.mediaUrls);
 
     if (mediaList.length === 0) {
-      if (payload.platform === "instagram") {
-        throw new BadRequestException(
-          "Instagram posts require at least one image or one video.",
-        );
-      }
-
       const form = new FormData();
-      form.append("user", payload.username);
-      form.append("platform[]", payload.platform);
-      form.append("title", title);
-      form.append("status", "active");
-      form.append("async_upload", String(asyncUpload));
+      form.append('user', payload.username);
+      form.append('platform[]', payload.platform);
+      form.append('title', title);
+      form.append('status', 'active');
+      form.append('async_upload', String(asyncUpload));
 
-      const result = await this.api("/upload_text", {
-        method: "POST",
+      const result = await this.api('/upload_text', {
+        method: 'POST',
         body: form,
       });
       return { result, title, mediaList };
@@ -526,76 +566,56 @@ export class SocialMediaService {
 
     if (mediaList.every((u) => this.isImageUrl(u))) {
       const form = new FormData();
-      form.append("user", payload.username);
-      form.append("platform[]", payload.platform);
-      form.append("title", title);
-      form.append("status", "active");
-      form.append("async_upload", String(asyncUpload));
-      if (payload.platform === "instagram") {
-        form.append("instagram_description", title);
-        form.append("description", title);
-      }
+      form.append('user', payload.username);
+      form.append('platform[]', payload.platform);
+      form.append('title', title);
+      form.append('status', 'active');
+      form.append('async_upload', String(asyncUpload));
 
       for (const url of mediaList) {
-        form.append("photo_urls[]", url);
-        form.append("photos[]", url);
-        form.append("urls[]", url);
+        form.append('photo_urls[]', url);
+        form.append('photos[]', url);
+        form.append('urls[]', url);
       }
-      form.append("photo_url", mediaList[0]);
-      form.append("image", mediaList[0]);
-      form.append("photo", mediaList[0]);
+      form.append('photo_url', mediaList[0]);
+      form.append('image', mediaList[0]);
+      form.append('photo', mediaList[0]);
 
-      const result = await this.api("/upload_photos", {
-        method: "POST",
-        body: form,
-      });
+      const result = await this.api('/upload_photos', { method: 'POST', body: form });
       return { result, title, mediaList };
     }
 
     if (mediaList.every((u) => this.isVideoUrl(u))) {
       if (mediaList.length > 1) {
-        throw new BadRequestException("Only one video is allowed per post.");
+        throw new BadRequestException('Only one video is allowed per post.');
       }
 
       const form = new FormData();
-      form.append("user", payload.username);
-      form.append("platform[]", payload.platform);
-      form.append("title", title);
-      form.append("status", "active");
-      form.append("video", mediaList[0]);
-      form.append("async_upload", String(asyncUpload));
-      if (payload.platform === "instagram") {
-        form.append("instagram_title", title);
-      }
+      form.append('user', payload.username);
+      form.append('platform[]', payload.platform);
+      form.append('title', title);
+      form.append('status', 'active');
+      form.append('video', mediaList[0]);
+      form.append('async_upload', String(asyncUpload));
 
-      const result = await this.api("/upload", {
-        method: "POST",
-        body: form,
-      });
+      const result = await this.api('/upload_videos', { method: 'POST', body: form });
       return { result, title, mediaList };
     }
 
-    throw new BadRequestException("Use a direct image/video URL");
+    throw new BadRequestException('Use a direct image/video URL');
   }
 
-  private async getOwnedPostOrThrow(
-    postId: string,
-    user: User,
-  ): Promise<ScheduledPost> {
-    const post = await this.prisma.scheduledPost.findUnique({
-      where: { id: postId },
-    });
-    if (!post) throw new NotFoundException("Scheduled post not found");
+  private async getOwnedPostOrThrow(postId: string, user: User): Promise<ScheduledPost> {
+    const post = await this.prisma.scheduledPost.findUnique({ where: { id: postId } });
+    if (!post) throw new NotFoundException('Scheduled post not found');
     if (user.role !== UserRole.ADMIN && post.userId !== user.id) {
-      throw new ForbiddenException(
-        "You can only access your own scheduled posts",
-      );
+      throw new ForbiddenException('You can only access your own scheduled posts');
     }
     return post;
   }
 
   me() {
-    return this.api("/uploadposts/me");
+    return this.api('/uploadposts/me');
   }
 
   createUser(username: string) {
@@ -604,9 +624,9 @@ export class SocialMediaService {
 
   private async createOrReuseUploadPostProfile(username: string) {
     try {
-      const created = await this.api("/uploadposts/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const created = await this.api('/uploadposts/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
       });
       return { success: true, profile: created, reused: false };
@@ -617,12 +637,9 @@ export class SocialMediaService {
           : null;
       const providerError = res?.error as Record<string, any> | undefined;
 
-      if (
-        providerError?.error_code === "PROFILE_LIMIT_REACHED" ||
-        Number(res?.statusCode) === 409
-      ) {
+      if (providerError?.error_code === 'PROFILE_LIMIT_REACHED' || Number(res?.statusCode) === 409) {
         // Try to continue with existing profile list
-        const list = await this.api("/uploadposts/users");
+        const list = await this.api('/uploadposts/users');
         const profiles = Array.isArray((list as any)?.profiles)
           ? (list as any).profiles
           : Array.isArray(list)
@@ -631,20 +648,15 @@ export class SocialMediaService {
 
         const existing = profiles.find((p: any) => p?.username === username);
         if (existing) {
-          return {
-            success: true,
-            profile: existing,
-            reused: true,
-            note: "Existing profile reused due to plan limit.",
-          };
+          return { success: true, profile: existing, reused: true, note: 'Existing profile reused due to plan limit.' };
         }
 
         throw new BadRequestException({
           message:
-            "Upload-Post profile limit reached. Upgrade plan or delete an existing provider profile, then retry.",
+            'Upload-Post profile limit reached. Upgrade plan or delete an existing provider profile, then retry.',
           provider: providerError,
           suggestion:
-            "Use one existing username per client, or upgrade from Default plan (limit: 2 profiles).",
+            'Use one existing username per client, or upgrade from Default plan (limit: 2 profiles).',
         });
       }
 
@@ -652,46 +664,7 @@ export class SocialMediaService {
     }
   }
 
-  private async disconnectProviderProfileByUsername(username: string) {
-    try {
-      const result = await this.api("/uploadposts/users", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
-      });
-
-      return {
-        success: true,
-        username,
-        result,
-      };
-    } catch (error) {
-      const res =
-        error instanceof BadRequestException
-          ? (error.getResponse() as Record<string, any>)
-          : null;
-
-      // ✅ Handle already-deleted profile safely
-      if (Number(res?.statusCode) === 404) {
-        return {
-          success: true,
-          username,
-          alreadyDeleted: true,
-        };
-      }
-
-      throw new BadRequestException({
-        message: "Failed to delete Upload-Post profile",
-        username,
-        provider: res?.error,
-      });
-    }
-  }
-
-  async createConnectLinkForUser(
-    user: User,
-    payload: { redirectUrl: string; platform: string; showCalendar?: boolean },
-  ) {
+  async createConnectLinkForUser(user: User, payload: { redirectUrl: string; platform: string; showCalendar?: boolean }) {
     const platform = this.normalizePlatform(payload.platform);
     const prismaPlatform = this.toPrismaPlatform(platform);
 
@@ -706,9 +679,9 @@ export class SocialMediaService {
     const username = this.uploadPostUsername(user);
     await this.createOrReuseUploadPostProfile(username);
 
-    const linkResult = await this.api("/uploadposts/users/generate-jwt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const linkResult = await this.api('/uploadposts/users/generate-jwt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username,
         platforms: [platform],
@@ -739,104 +712,6 @@ export class SocialMediaService {
       username,
       platform,
       connect: linkResult,
-    };
-  }
-
-  // async disconnectLinkForUser(user: User, payload: { platform: string }) {
-  //   const platform = this.normalizePlatform(payload.platform);
-  //   const prismaPlatform = this.toPrismaPlatform(platform);
-
-  //   const existing = await this.prisma.socialPlatformLink.findUnique({
-  //     where: { userId_platform: { userId: user.id, platform: prismaPlatform } },
-  //   });
-
-  //   if (!existing) {
-  //     return {
-  //       success: true,
-  //       platform,
-  //       disconnected: false,
-  //       message: "Platform link was not connected.",
-  //     };
-  //   }
-
-  //   await this.disconnectProviderProfileByUsername(existing.platformUsername);
-
-  //   const previousLink = {
-  //     id: existing.id,
-  //     userId: existing.userId,
-  //     platform,
-  //     externalRef: existing.externalRef,
-  //     externalProfileUrl: existing.externalProfileUrl,
-  //     linkedAt: existing.linkedAt,
-  //     createdAt: existing.createdAt,
-  //     updatedAt: existing.updatedAt,
-  //   };
-
-  //   await this.prisma.socialPlatformLink.delete({
-  //     where: { userId_platform: { userId: user.id, platform: prismaPlatform } },
-  //   });
-
-  //   return {
-  //     success: true,
-  //     platform,
-  //     disconnected: true,
-  //     message: "Platform disconnected successfully.",
-  //     link: previousLink,
-  //   };
-  // }
-
-  async disconnectLinkForUser(user: User, payload: { platform: string }) {
-    const platform = this.normalizePlatform(payload.platform);
-    const prismaPlatform = this.toPrismaPlatform(platform);
-
-    const existing = await this.prisma.socialPlatformLink.findUnique({
-      where: { userId_platform: { userId: user.id, platform: prismaPlatform } },
-    });
-
-    if (!existing) {
-      return {
-        success: true,
-        platform,
-        disconnected: false,
-        message: "Platform link was not connected.",
-      };
-    }
-
-    // 🔢 Count BEFORE deleting
-    const totalLinks = await this.prisma.socialPlatformLink.count({
-      where: { userId: user.id },
-    });
-
-    const username = this.uploadPostUsername(user);
-
-    const previousLink = {
-      id: existing.id,
-      userId: existing.userId,
-      platform,
-      externalRef: existing.externalRef,
-      externalProfileUrl: existing.externalProfileUrl,
-      linkedAt: existing.linkedAt,
-      createdAt: existing.createdAt,
-      updatedAt: existing.updatedAt,
-    };
-
-    // 🧹 Step 1: remove local link
-    await this.prisma.socialPlatformLink.delete({
-      where: { userId_platform: { userId: user.id, platform: prismaPlatform } },
-    });
-
-    // delete all provider profiles
-    await this.disconnectProviderProfileByUsername(username);
-
-    return {
-      success: true,
-      platform,
-      disconnected: true,
-      message:
-        totalLinks === 1
-          ? "Platform disconnected and provider profile deleted."
-          : "Platform disconnected locally (provider profile retained).",
-      link: previousLink,
     };
   }
 
@@ -873,10 +748,7 @@ export class SocialMediaService {
         userId: user.id,
         platform: prismaPlatform,
         title: published.title,
-        mediaUrl:
-          published.mediaList.length > 1
-            ? JSON.stringify(published.mediaList)
-            : (published.mediaList[0] ?? null),
+        mediaUrl: published.mediaList.length > 1 ? JSON.stringify(published.mediaList) : (published.mediaList[0] ?? null),
         scheduledAt: new Date(),
         status: ScheduledPostStatus.POSTED,
         externalReqId: ids.requestId,
@@ -888,53 +760,7 @@ export class SocialMediaService {
     return { success: true, result: published.result, savedPost };
   }
 
-  async publishNowMultipartByUser(
-    user: User,
-    payload: {
-      username?: string;
-      platform?: string;
-      title?: string;
-      asyncUpload?: unknown;
-      files: Express.Multer.File[];
-    },
-  ) {
-    if (!payload.username?.trim()) {
-      throw new BadRequestException("username is required");
-    }
-
-    if (!payload.platform?.trim()) {
-      throw new BadRequestException("platform is required");
-    }
-
-    if (!payload.title?.trim()) {
-      throw new BadRequestException("title is required");
-    }
-
-    const uploadedUrls = await this.uploadMultipartFiles(
-      user.id,
-      payload.files,
-    );
-
-    return this.publishNowByUser(user, {
-      username: payload.username.trim(),
-      platform: payload.platform.trim(),
-      title: payload.title.trim(),
-      mediaUrl: uploadedUrls.length === 1 ? uploadedUrls[0] : undefined,
-      mediaUrls: uploadedUrls.length > 1 ? uploadedUrls : undefined,
-      asyncUpload: this.normalizeBoolean(payload.asyncUpload, true),
-    });
-  }
-
-  async schedulePost(
-    user: User,
-    payload: {
-      platform: string;
-      title: string;
-      mediaUrl?: string;
-      mediaUrls?: string[];
-      scheduledAt: string;
-    },
-  ) {
+  async schedulePost(user: User, payload: { platform: string; title: string; mediaUrl?: string; mediaUrls?: string[]; scheduledAt: string }) {
     const platform = this.normalizePlatform(payload.platform);
     const prismaPlatform = this.toPrismaPlatform(platform);
     await this.ensurePlatformLinked(user.id, prismaPlatform);
@@ -942,11 +768,11 @@ export class SocialMediaService {
     const scheduledAt = new Date(payload.scheduledAt);
 
     if (Number.isNaN(scheduledAt.getTime())) {
-      throw new BadRequestException("scheduledAt must be a valid ISO date");
+      throw new BadRequestException('scheduledAt must be a valid ISO date');
     }
 
     if (scheduledAt <= new Date()) {
-      throw new BadRequestException("scheduledAt must be in the future");
+      throw new BadRequestException('scheduledAt must be in the future');
     }
 
     await this.enforceScheduleLimit(user.id);

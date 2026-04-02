@@ -48,6 +48,7 @@ export const schedulerListQuerySchema = z.object({
   status: z.string().optional(),
   scheduleType: z.string().optional(),
   sessionStatus: z.string().optional(),
+  calendlySyncStatus: z.string().optional(),
   failure: z.coerce.boolean().optional(),
   userId: z.string().optional(),
   platform: z.string().optional(),

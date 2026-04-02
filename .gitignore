@@ -41,7 +41,6 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.backup
-.env
 
 # temp directory
 .temp
@@ -59,10 +58,11 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # .gitignore
 
 .env.example
-
+.vscode
 pnpm-lock.yaml
 pnpm-workspace.yaml
 
 uploads/*
 !uploads/
 !uploads/.gitkeep
+config.bat

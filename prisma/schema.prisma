@@ -109,28 +109,28 @@ enum ScheduledPostStatus {
 }
 
 model Plan {
-  id                     String         @id @default(cuid())
-  code                   String         @unique
-  name                   String
-  category               PlanCategory
-  isJewelry              Boolean        @default(false)
-  platformLimit          Int?
-  baseVisualQuota        Int?
-  basePostQuota          Int?
-  postLimitType          PostLimitType  @default(NONE)
-  schedulerRole          SchedulerRole  @default(CLIENT)
-  priceStandardCents     Int
-  priceFounderCents      Int
-  stripePriceStandardId  String?
-  stripePriceFounderId   String?
-  hasYearlyPrice         Boolean        @default(false)
-  photoSessionEnabled    Boolean        @default(false)
-  videoSessionEnabled    Boolean        @default(false)
-  photoSessionsPerPeriod Int            @default(0)
-  videoSessionsPerPeriod Int            @default(0)
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
-  subscriptions          Subscription[]
+  id                    String         @id @default(cuid())
+  code                  String         @unique
+  name                  String
+  category              PlanCategory
+  isJewelry             Boolean        @default(false)
+  platformLimit         Int?
+  baseVisualQuota       Int?
+  basePostQuota         Int?
+  postLimitType         PostLimitType  @default(NONE)
+  schedulerRole         SchedulerRole  @default(CLIENT)
+  priceStandardCents    Int
+  priceFounderCents     Int
+  stripePriceStandardId String?
+  stripePriceFounderId  String?
+  hasYearlyPrice        Boolean        @default(false)
+  photoSessionEnabled   Boolean        @default(false)
+  videoSessionEnabled   Boolean        @default(false)
+  photoSessionsPerPeriod Int           @default(0)
+  videoSessionsPerPeriod Int           @default(0)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  subscriptions         Subscription[]
 }
 
 model Subscription {
@@ -324,29 +324,30 @@ model Post {
   sessionTitle           String?
   sessionNotes           String?
   sessionDurationMinutes Int?
-  sessionFailureReason   String?
-  scheduledFor           DateTime?
-  caption                String?
-  hashtags               Json?
-  cta                    String?
-  shortDescription       String?
-  initiatedBy            PostInitiator  @default(USER)
-  adminId                String?
-  adminReason            String?
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
-  asset                  Asset?         @relation(fields: [assetId], references: [id])
-  contentItem            ContentItem?   @relation(fields: [contentItemId], references: [id])
-  user                   User           @relation(fields: [userId], references: [id])
-  admin                  User?          @relation("AdminInitiatedPosts", fields: [adminId], references: [id])
-  PostAsset              PostAsset[]
-  events                 PostEvent[]
-  targets                PostTarget[]
+  sessionFailureReason String?
+  scheduledFor     DateTime?
+  caption          String?
+  hashtags         Json?
+  cta              String?
+  shortDescription String?
+  initiatedBy      PostInitiator @default(USER)
+  adminId          String?
+  adminReason      String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  asset            Asset?        @relation(fields: [assetId], references: [id])
+  contentItem      ContentItem?  @relation(fields: [contentItemId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
+  admin            User?         @relation("AdminInitiatedPosts", fields: [adminId], references: [id])
+  PostAsset        PostAsset[]
+  events           PostEvent[]
+  targets          PostTarget[]
 
   @@index([userId])
   @@index([scheduledFor])
   @@index([scheduleType])
   @@index([sessionStatus])
+  @@index([calendlySyncStatus])
   @@index([adminId])
   @@index([initiatedBy])
 }
@@ -706,6 +707,12 @@ enum SessionStatus {
   COMPLETED
   FAILED
   CANCELED
+}
+
+enum CalendlySyncStatus {
+  PENDING
+  SYNCED
+  FAILED
 }
 
 enum PostInitiator {

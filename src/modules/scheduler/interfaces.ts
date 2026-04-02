@@ -8,6 +8,7 @@ export type Actor = {
 export type SchedulerView = "day" | "week" | "month" | "list";
 export type SchedulerPublishStatus = "completed" | "failed";
 export type SchedulerSessionStatusUpdate = "completed" | "failed" | "canceled";
+export type SchedulerCalendlySyncStatus = "PENDING" | "SYNCED" | "FAILED";
 
 export type SchedulerCreateInput = {
   userId?: string;
@@ -59,6 +60,7 @@ export type SchedulerListFilters = {
   status?: PostStatus[];
   scheduleType?: ScheduleType[];
   sessionStatus?: SessionStatus[];
+  calendlySyncStatus?: SchedulerCalendlySyncStatus[];
   failure?: boolean;
   userId?: string;
   platform?: SocialPlatform[];

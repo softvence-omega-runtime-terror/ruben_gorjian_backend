@@ -62,23 +62,10 @@ router.post("/users", controller.createUser);
 router.get("/status", controller.status);
 
 // Authenticated (CUSTOMER/ADMIN)
-router.post(
-  "/platform/connect-link",
-  requireAuth,
-  controller.connectLinkForLoggedUser,
-);
-router.post(
-  "/platform/disconnect",
-  requireAuth,
-  controller.disconnectLinkForLoggedUser,
-);
+router.post("/platform/connect-link", requireAuth, controller.connectLinkForLoggedUser);
+router.post("/platform/disconnect", requireAuth, controller.disconnectLinkForLoggedUser);
 router.post("/publish-now", requireAuth, controller.publishNow);
-router.post(
-  "/publish-now/form-data",
-  requireAuth,
-  multipartUpload.array("files", 10),
-  controller.publishNowMultipart,
-);
+router.post("/publish-now/form-data", requireAuth, multipartUpload.array("files", 10), controller.publishNowMultipart);
 router.post("/calendar/schedule", requireAuth, controller.schedule);
 router.get("/calendar/my", requireAuth, controller.myCalendar);
 router.get("/calendar/:id", requireAuth, controller.getScheduledPost);
