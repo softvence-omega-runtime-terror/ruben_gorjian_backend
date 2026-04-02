@@ -11,6 +11,8 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "../../config/env";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../lib/errors";
+import { Upload } from "@aws-sdk/lib-storage";
+import { PassThrough } from "stream";
 
 // Minimal Nest-like exceptions so the original pasted logic can remain unchanged in Express.
 // Express routes should use `handleError()` to convert these into proper HTTP responses.
@@ -405,6 +407,36 @@ export class SocialMediaService {
     return `${baseUrl.replace(/\/+$/, "")}/${storageKey.replace(/^\/+/, "")}`;
   }
 
+  // private async uploadMultipartFiles(
+  //   userId: string,
+  //   files: Express.Multer.File[],
+  // ): Promise<string[]> {
+  //   if (!files.length) return [];
+
+  //   if (!this.s3Client || !env.S3_BUCKET) {
+  //     throw new BadRequestException("S3 upload is not configured");
+  //   }
+
+  //   const uploadedUrls: string[] = [];
+
+  //   for (const file of files) {
+  //     const storageKey = `attachments/media/${Date.now()}_${userId}_${this.sanitizeFilename(file.originalname)}`;
+
+  //     await this.s3Client.send(
+  //       new PutObjectCommand({
+  //         Bucket: env.S3_BUCKET,
+  //         Key: storageKey,
+  //         Body: file.buffer,
+  //         ContentType: file.mimetype || "application/octet-stream",
+  //       }),
+  //     );
+
+  //     uploadedUrls.push(this.buildStorageUrl(storageKey));
+  //   }
+
+  //   return uploadedUrls;
+  // }
+
   private async uploadMultipartFiles(
     userId: string,
     files: Express.Multer.File[],
@@ -418,16 +450,37 @@ export class SocialMediaService {
     const uploadedUrls: string[] = [];
 
     for (const file of files) {
-      const storageKey = `attachments/media/${Date.now()}_${userId}_${this.sanitizeFilename(file.originalname)}`;
+      const storageKey = `attachments/media/${Date.now()}_${userId}_${this.sanitizeFilename(
+        file.originalname,
+      )}`;
 
-      await this.s3Client.send(
-        new PutObjectCommand({
-          Bucket: env.S3_BUCKET,
-          Key: storageKey,
-          Body: file.buffer,
-          ContentType: file.mimetype || "application/octet-stream",
-        }),
-      );
+      if (file.mimetype.startsWith("video/")) {
+        // Video: upload as stream
+        const stream = new PassThrough();
+        stream.end(file.buffer); // convert buffer to stream
+
+        const upload = new Upload({
+          client: this.s3Client,
+          params: {
+            Bucket: env.S3_BUCKET,
+            Key: storageKey,
+            Body: stream,
+            ContentType: file.mimetype || "application/octet-stream",
+          },
+        });
+
+        await upload.done();
+      } else {
+        // Image: upload directly from buffer
+        await this.s3Client.send(
+          new PutObjectCommand({
+            Bucket: env.S3_BUCKET,
+            Key: storageKey,
+            Body: file.buffer,
+            ContentType: file.mimetype || "application/octet-stream",
+          }),
+        );
+      }
 
       uploadedUrls.push(this.buildStorageUrl(storageKey));
     }
@@ -515,7 +568,7 @@ export class SocialMediaService {
         form.append("instagram_title", title);
       }
 
-      const result = await this.api("/upload_videos", {
+      const result = await this.api("/upload", {
         method: "POST",
         body: form,
       });
