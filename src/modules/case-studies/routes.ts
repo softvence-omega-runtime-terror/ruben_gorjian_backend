@@ -230,7 +230,7 @@ type PaginationMeta = {
 };
 
 // Get active case studies - available for authenticated users/admins
-router.get("/", requireAuth, async (req, res) => {
+router.get("/", async (req, res) => {
   const { page, limit } = paginationSchema.parse(req.query);
   const skip = (page - 1) * limit;
 
