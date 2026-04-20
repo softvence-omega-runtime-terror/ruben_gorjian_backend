@@ -112,8 +112,6 @@ app.use("/posts", postsRouter);
 app.use("/posts", enhancedPostsRouter);
 app.use("/scheduler", schedulerRouter);
 app.use("/api/scheduler", schedulerRouter);
-app.use("/scheduler", schedulerRouter);
-app.use("/api/scheduler", schedulerRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/admin", adminPostRouter);
 app.use("/api/admin/overview", adminOverviewRouter);

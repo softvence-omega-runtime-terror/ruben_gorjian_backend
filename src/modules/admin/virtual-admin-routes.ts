@@ -70,8 +70,12 @@ const PAGE_ROUTE_PERMISSION_MAP: Record<PagePermissionKey, RoutePermissionInput[
 	SCHEDULE_MANAGE: [
 		{ method: "GET", pathPattern: "/api/admin/users/:id/scheduled-items", description: "View user scheduled items" },
 		{ method: "GET", pathPattern: "/api/admin/calendars", description: "View admin calendar data" },
+		{ method: "ALL", pathPattern: "/api/scheduler/sessions*", description: "Manage scheduler sessions" },
+		{ method: "ALL", pathPattern: "/api/scheduler/posts*", description: "Manage scheduler posts" },
 		{ method: "GET", pathPattern: "/admin/users/:id/scheduled-items", description: "View user scheduled items (legacy mount)" },
 		{ method: "GET", pathPattern: "/admin/calendars", description: "View admin calendar data (legacy mount)" },
+		{ method: "ALL", pathPattern: "/scheduler/sessions*", description: "Manage scheduler sessions (legacy mount)" },
+		{ method: "ALL", pathPattern: "/scheduler/posts*", description: "Manage scheduler posts (legacy mount)" },
 	],
 	POST_MANAGE: [
 		{ method: "ALL", pathPattern: "/api/admin/users/:userId/posts*", description: "Manage admin posts" },

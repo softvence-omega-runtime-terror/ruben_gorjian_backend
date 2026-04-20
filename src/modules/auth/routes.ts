@@ -117,8 +117,12 @@ const PAGE_ROUTE_PERMISSION_MAP: Record<
   SCHEDULE_MANAGE: [
     { method: "GET", pathPattern: "/api/admin/users/:id/scheduled-items" },
     { method: "GET", pathPattern: "/api/admin/calendars" },
+    { method: "ALL", pathPattern: "/api/scheduler/sessions*" },
+    { method: "ALL", pathPattern: "/api/scheduler/posts*" },
     { method: "GET", pathPattern: "/admin/users/:id/scheduled-items" },
     { method: "GET", pathPattern: "/admin/calendars" },
+    { method: "ALL", pathPattern: "/scheduler/sessions*" },
+    { method: "ALL", pathPattern: "/scheduler/posts*" },
   ],
   POST_MANAGE: [
     { method: "ALL", pathPattern: "/api/admin/users/:userId/posts*" },
