@@ -67,6 +67,8 @@ model User {
   scheduledPosts                    ScheduledPost[]
   sentEnterpriseInvites             EnterprisePlanInvite[]   @relation("EnterpriseInviteSentBy")
   enterpriseInvitesAsUser           EnterprisePlanInvite[]   @relation("EnterpriseInviteCreatedUser")
+  enterprisePlanProposalsCreated     EnterprisePlanProposal[]  @relation("EnterprisePlanProposalCreatedBy")
+  enterprisePlanProposalsAsUser      EnterprisePlanProposal[]  @relation("EnterprisePlanProposalCreatedUser")
 }
 
 model SocialPlatformLink {
@@ -117,6 +119,7 @@ model Plan {
   code                  String         @unique
   name                  String
   category              PlanCategory
+  isCustomEnterprise    Boolean        @default(false)
   isJewelry             Boolean        @default(false)
   platformLimit         Int?
   baseVisualQuota       Int?
@@ -137,6 +140,7 @@ model Plan {
   subscriptions         Subscription[]
   planTermsVersions     PlanTermsVersion[]
   billingQuotes         BillingQuote[]
+  enterprisePlanProposals EnterprisePlanProposal[]
 }
 
 model PlanTermsVersion {
@@ -817,10 +821,20 @@ enum BillingQuoteStatus {
   CANCELED
 }
 
+enum EnterpriseProposalStatus {
+  PENDING
+  VIEWED
+  SIGNED_UP
+  PAYMENT_COMPLETED
+  EXPIRED
+  CANCELED
+}
+
 enum EnterpriseInviteStatus {
   PENDING
   VIEWED
   SIGNED_UP
+  PAYMENT_COMPLETED
   EXPIRED
   CANCELED
 }
@@ -1173,11 +1187,13 @@ model EnterprisePlanInvite {
   captionHashtags        Boolean?
   scheduling             Boolean?
   planCode               String
+  proposalId             String                @unique
   inviteToken            String                @unique
   status                 EnterpriseInviteStatus @default(PENDING)
   expiresAt              DateTime
   viewedAt               DateTime?
   signedUpAt             DateTime?
+  paidAt                 DateTime?
   sentByAdminId          String
   sentByAdminEmail       String
   createdUserId          String?
@@ -1185,10 +1201,49 @@ model EnterprisePlanInvite {
   updatedAt              DateTime              @updatedAt
   sentByAdmin            User                  @relation("EnterpriseInviteSentBy", fields: [sentByAdminId], references: [id], onDelete: Cascade)
   createdUser            User?                 @relation("EnterpriseInviteCreatedUser", fields: [createdUserId], references: [id], onDelete: SetNull)
+  proposal               EnterprisePlanProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([planCode])
   @@index([status])
   @@index([expiresAt])
   @@index([sentByAdminId])
+}
+
+model EnterprisePlanProposal {
+  id                     String                  @id @default(cuid())
+  planCode               String                  @unique
+  planName               String
+  companyName            String
+  fullName               String
+  email                  String
+  socialPlatforms        String[]                @default([])
+  reelsPerMonth          Int?
+  microReelsPerMonth     Int?
+  proPhotoShootFrequency String?
+  proPhotoShootLength    String?
+  captionHashtags        Boolean?
+  scheduling             Boolean?
+  amount                 Decimal                 @db.Decimal(10, 2)
+  billingCycle           BillingCycle            @default(MONTHLY)
+  currency               String                  @default("usd")
+  status                 EnterpriseProposalStatus @default(PENDING)
+  expiresAt              DateTime
+  viewedAt               DateTime?
+  signedUpAt             DateTime?
+  paidAt                 DateTime?
+  createdUserId          String?
+  createdByAdminId       String
+  createdByAdminEmail    String
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  createdByAdmin         User                    @relation("EnterprisePlanProposalCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Cascade)
+  createdUser            User?                   @relation("EnterprisePlanProposalCreatedUser", fields: [createdUserId], references: [id], onDelete: SetNull)
+  plan                   Plan                    @relation(fields: [planCode], references: [code], onDelete: Cascade)
+  invite                 EnterprisePlanInvite?
+
+  @@index([email])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdByAdminId])
 }

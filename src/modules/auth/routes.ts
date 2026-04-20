@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import Stripe from "stripe";
-import { EnterpriseInviteStatus, Role, UserStatus } from "@prisma/client";
+import { EnterpriseInviteStatus, EnterpriseProposalStatus, Role, UserStatus } from "@prisma/client";
 import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
@@ -288,6 +288,9 @@ const enterpriseInviteSignupSchema = z.object({
 async function resolveEnterpriseInvite(token: string) {
   const invite = await prisma.enterprisePlanInvite.findUnique({
     where: { inviteToken: token },
+    include: {
+      proposal: true,
+    },
   });
 
   if (!invite) {
@@ -298,7 +301,10 @@ async function resolveEnterpriseInvite(token: string) {
     return { error: "Invite is canceled" as const, invite: null };
   }
 
-  if (invite.status === EnterpriseInviteStatus.SIGNED_UP) {
+  if (
+    invite.status === EnterpriseInviteStatus.SIGNED_UP ||
+    invite.status === EnterpriseInviteStatus.PAYMENT_COMPLETED
+  ) {
     return { error: "Invite already used" as const, invite: null };
   }
 
@@ -337,6 +343,13 @@ router.get("/enterprise-invite/validate", async (req, res) => {
         viewedAt: new Date(),
       },
     });
+    await prisma.enterprisePlanProposal.update({
+      where: { id: invite.proposalId },
+      data: {
+        status: EnterpriseProposalStatus.VIEWED,
+        viewedAt: new Date(),
+      },
+    });
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -361,6 +374,17 @@ router.get("/enterprise-invite/validate", async (req, res) => {
       expiresAt: invite.expiresAt,
       userExists: Boolean(existingUser),
       userEmailVerified: existingUser?.emailVerified ?? null,
+      proposal: invite.proposal
+        ? {
+          id: invite.proposal.id,
+          planCode: invite.proposal.planCode,
+          planName: invite.proposal.planName,
+          amount: Number(invite.proposal.amount),
+          billingCycle: invite.proposal.billingCycle,
+          currency: invite.proposal.currency,
+          status: invite.proposal.status,
+        }
+        : null,
     },
   });
 });
@@ -390,11 +414,37 @@ router.post("/signup-enterprise-invite", authLimiter, async (req, res) => {
       },
     });
 
-    return res.status(409).json({
-      error: "Email already registered. Please login to continue.",
+    if (!existing.emailVerified) {
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_MS);
+
+      await prisma.emailVerificationToken.create({
+        data: {
+          userId: existing.id,
+          token: verificationToken,
+          expiresAt,
+        },
+      });
+      await sendVerificationEmail(email, verificationToken, invite.planCode);
+
+      return res.status(200).json({
+        message: "Account already exists and is not verified. Verification email sent again.",
+        requiresVerification: true,
+        requiresLogin: false,
+        email,
+        planCode: invite.planCode,
+        amount: Number(invite.proposal.amount),
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Email already registered. Please login to continue checkout.",
+      requiresLogin: true,
       code: "USER_EXISTS",
       email,
       planCode: invite.planCode,
+      amount: Number(invite.proposal.amount),
     });
   }
 
@@ -421,12 +471,61 @@ router.post("/signup-enterprise-invite", authLimiter, async (req, res) => {
       },
     },
   });
+
+  await prisma.brandProfile.upsert({
+    where: { userId: user.id },
+    update: {
+      fullManagementOnboardingData: {
+        enterpriseInvitePrefill: {
+          companyName: invite.companyName,
+          fullName: invite.fullName,
+          socialPlatforms: invite.socialPlatforms,
+          reelsPerMonth: invite.reelsPerMonth,
+          microReelsPerMonth: invite.microReelsPerMonth,
+          proPhotoShootFrequency: invite.proPhotoShootFrequency,
+          proPhotoShootLength: invite.proPhotoShootLength,
+          captionHashtags: invite.captionHashtags,
+          scheduling: invite.scheduling,
+          planCode: invite.planCode,
+          inviteId: invite.id,
+        },
+      },
+    },
+    create: {
+      userId: user.id,
+      fullManagementOnboardingData: {
+        enterpriseInvitePrefill: {
+          companyName: invite.companyName,
+          fullName: invite.fullName,
+          socialPlatforms: invite.socialPlatforms,
+          reelsPerMonth: invite.reelsPerMonth,
+          microReelsPerMonth: invite.microReelsPerMonth,
+          proPhotoShootFrequency: invite.proPhotoShootFrequency,
+          proPhotoShootLength: invite.proPhotoShootLength,
+          captionHashtags: invite.captionHashtags,
+          scheduling: invite.scheduling,
+          planCode: invite.planCode,
+          inviteId: invite.id,
+        },
+      },
+    },
+  });
+
   await ensureUserProviderRoutingConfig(user.id);
 
   await prisma.enterprisePlanInvite.update({
     where: { id: invite.id },
     data: {
       status: EnterpriseInviteStatus.SIGNED_UP,
+      signedUpAt: new Date(),
+      createdUserId: user.id,
+    },
+  });
+
+  await prisma.enterprisePlanProposal.update({
+    where: { id: invite.proposalId },
+    data: {
+      status: EnterpriseProposalStatus.SIGNED_UP,
       signedUpAt: new Date(),
       createdUserId: user.id,
     },
@@ -439,6 +538,7 @@ router.post("/signup-enterprise-invite", authLimiter, async (req, res) => {
     requiresVerification: true,
     email,
     planCode: invite.planCode,
+    amount: Number(invite.proposal.amount),
   });
 });
 

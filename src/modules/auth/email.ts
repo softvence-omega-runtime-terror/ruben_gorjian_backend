@@ -85,6 +85,9 @@ export async function sendEnterprisePlanInviteEmail(params: {
   email: string;
   token: string;
   planCode: string;
+  planName?: string;
+  amount?: number;
+  billingCycle?: "monthly" | "yearly";
   fullName?: string;
   companyName?: string;
 }) {
@@ -105,6 +108,10 @@ export async function sendEnterprisePlanInviteEmail(params: {
     params.token
   )}`;
   const recipientName = params.fullName || "there";
+  const quotedAmount = typeof params.amount === "number"
+    ? params.amount.toFixed(2)
+    : null;
+  const billingCycleLabel = params.billingCycle === "yearly" ? "Yearly" : "Monthly";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -126,6 +133,8 @@ export async function sendEnterprisePlanInviteEmail(params: {
               You have been invited to activate a custom Talexia Enterprise plan.
             </p>
             <p style="margin:0 0 8px;color:#475569;font-size:14px;line-height:1.6;"><strong>Plan Code:</strong> ${params.planCode}</p>
+            ${params.planName ? `<p style="margin:0 0 8px;color:#475569;font-size:14px;line-height:1.6;"><strong>Plan Name:</strong> ${params.planName}</p>` : ""}
+            ${quotedAmount ? `<p style="margin:0 0 8px;color:#475569;font-size:14px;line-height:1.6;"><strong>Quoted Price:</strong> $${quotedAmount} / ${billingCycleLabel.toLowerCase()}</p>` : ""}
             ${params.companyName ? `<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;"><strong>Company:</strong> ${params.companyName}</p>` : "<div style=\"height:16px\"></div>"}
             <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
               <tr>

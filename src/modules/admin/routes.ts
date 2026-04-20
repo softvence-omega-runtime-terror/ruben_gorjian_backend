@@ -1,7 +1,17 @@
 import express from "express";
 import crypto from "crypto";
 import { z } from "zod";
-import { AuditAction, EnterpriseInviteStatus, Prisma, ProviderRoutingMode } from "@prisma/client";
+import {
+  AuditAction,
+  BillingCycle,
+  EnterpriseInviteStatus,
+  EnterpriseProposalStatus,
+  PlanCategory,
+  Prisma,
+  PostLimitType,
+  ProviderRoutingMode,
+  SchedulerRole,
+} from "@prisma/client";
 import Stripe from "stripe";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/requireAuth";
@@ -231,6 +241,7 @@ router.get("/users", async (req, res) => {
 });
 
 const enterpriseInviteSchema = z.object({
+  planName: z.string().trim().min(1).max(200),
   companyName: z.string().trim().min(1).max(200),
   fullName: z.string().trim().min(1).max(120),
   email: z.string().email(),
@@ -241,9 +252,22 @@ const enterpriseInviteSchema = z.object({
   proPhotoShootLength: z.string().trim().min(1).max(120).optional(),
   captionHashtags: z.boolean(),
   scheduling: z.boolean(),
-  planCode: z.string().trim().min(1).max(80),
+  amount: z.coerce.number().positive().max(1_000_000),
+  billingCycle: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
   expiresInDays: z.coerce.number().int().min(1).max(30).optional().default(7),
 });
+
+async function generateEnterprisePlanCode() {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const suffix = crypto.randomBytes(4).toString("hex").toUpperCase();
+    const candidate = `ENT_${suffix}`;
+    const exists = await prisma.plan.findUnique({ where: { code: candidate }, select: { code: true } });
+    if (!exists) {
+      return candidate;
+    }
+  }
+  throw new Error("Unable to generate a unique enterprise plan code");
+}
 
 router.post("/enterprise-plan/invites", async (req, res) => {
   const parsed = enterpriseInviteSchema.safeParse(req.body);
@@ -252,16 +276,62 @@ router.post("/enterprise-plan/invites", async (req, res) => {
   }
 
   const data = parsed.data;
-  const planCode = data.planCode.trim().toUpperCase();
+  const planCode = await generateEnterprisePlanCode();
+  const billingCycle = data.billingCycle === "YEARLY" ? BillingCycle.YEARLY : BillingCycle.MONTHLY;
   const recipientEmail = data.email.toLowerCase().trim();
-
-  const plan = await prisma.plan.findUnique({ where: { code: planCode } });
-  if (!plan) {
-    return res.status(400).json({ error: "Invalid plan code" });
-  }
+  const amount = Number(data.amount.toFixed(2));
+  const quotedAmountCents = Math.round(amount * 100);
 
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000);
+
+  await prisma.plan.create({
+    data: {
+      code: planCode,
+      name: data.planName,
+      category: PlanCategory.FULL_MANAGEMENT,
+      isCustomEnterprise: true,
+      isJewelry: false,
+      platformLimit: null,
+      baseVisualQuota: null,
+      basePostQuota: null,
+      postLimitType: PostLimitType.NONE,
+      schedulerRole: SchedulerRole.CLIENT,
+      priceStandardCents: quotedAmountCents,
+      priceFounderCents: quotedAmountCents,
+      stripePriceStandardId: null,
+      stripePriceFounderId: null,
+      hasYearlyPrice: false,
+      photoSessionEnabled: false,
+      videoSessionEnabled: false,
+      photoSessionsPerPeriod: 0,
+      videoSessionsPerPeriod: 0,
+    },
+  });
+
+  const proposal = await prisma.enterprisePlanProposal.create({
+    data: {
+      planCode,
+      planName: data.planName,
+      companyName: data.companyName,
+      fullName: data.fullName,
+      email: recipientEmail,
+      socialPlatforms: data.socialPlatforms,
+      reelsPerMonth: data.reelsPerMonth,
+      microReelsPerMonth: data.microReelsPerMonth,
+      proPhotoShootFrequency: data.proPhotoShootFrequency,
+      proPhotoShootLength: data.proPhotoShootLength,
+      captionHashtags: data.captionHashtags,
+      scheduling: data.scheduling,
+      amount: new Prisma.Decimal(amount),
+      billingCycle,
+      currency: "usd",
+      expiresAt,
+      status: EnterpriseProposalStatus.PENDING,
+      createdByAdminId: req.user!.id,
+      createdByAdminEmail: req.user!.email,
+    },
+  });
 
   const invite = await prisma.enterprisePlanInvite.create({
     data: {
@@ -276,6 +346,7 @@ router.post("/enterprise-plan/invites", async (req, res) => {
       captionHashtags: data.captionHashtags,
       scheduling: data.scheduling,
       planCode,
+      proposalId: proposal.id,
       inviteToken: token,
       expiresAt,
       sentByAdminId: req.user!.id,
@@ -289,6 +360,9 @@ router.post("/enterprise-plan/invites", async (req, res) => {
     planCode,
     fullName: data.fullName,
     companyName: data.companyName,
+    planName: data.planName,
+    amount,
+    billingCycle: billingCycle === BillingCycle.YEARLY ? "yearly" : "monthly",
   });
 
   if (!emailResult.sent) {
@@ -324,6 +398,9 @@ router.post("/enterprise-plan/invites", async (req, res) => {
       status: invite.status,
       expiresAt: invite.expiresAt,
       createdAt: invite.createdAt,
+      planName: proposal.planName,
+      amount,
+      billingCycle: proposal.billingCycle,
     },
   });
 });
@@ -331,6 +408,7 @@ router.post("/enterprise-plan/invites", async (req, res) => {
 router.get("/enterprise-plan/invites", async (req, res) => {
   const schema = z.object({
     status: z.nativeEnum(EnterpriseInviteStatus).optional(),
+    search: z.string().trim().min(1).max(120).optional(),
     page: z.coerce.number().int().min(1).optional().default(1),
     pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   });
@@ -340,10 +418,20 @@ router.get("/enterprise-plan/invites", async (req, res) => {
     return res.status(400).json({ error: "Invalid query", details: parsed.error.flatten() });
   }
 
-  const { status, page, pageSize } = parsed.data;
+  const { status, search, page, pageSize } = parsed.data;
 
   const where = {
     ...(status ? { status } : {}),
+    ...(search
+      ? {
+        OR: [
+          { email: { contains: search, mode: "insensitive" as const } },
+          { fullName: { contains: search, mode: "insensitive" as const } },
+          { companyName: { contains: search, mode: "insensitive" as const } },
+          { planCode: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+      : {}),
   };
 
   const [total, items] = await Promise.all([
@@ -360,16 +448,309 @@ router.get("/enterprise-plan/invites", async (req, res) => {
         companyName: true,
         planCode: true,
         status: true,
+        proposal: {
+          select: {
+            planName: true,
+            amount: true,
+            billingCycle: true,
+            currency: true,
+            status: true,
+            expiresAt: true,
+          },
+        },
         createdAt: true,
         expiresAt: true,
         viewedAt: true,
         signedUpAt: true,
+        paidAt: true,
         sentByAdminEmail: true,
       },
     }),
   ]);
 
-  return res.json({ items, total, page, pageSize });
+  const normalizedItems = items.map((item) => ({
+    ...item,
+    proposal: item.proposal
+      ? {
+        planName: item.proposal.planName,
+        amount: Number(item.proposal.amount),
+        billingCycle: item.proposal.billingCycle,
+        currency: item.proposal.currency,
+        status: item.proposal.status,
+        expiresAt: item.proposal.expiresAt,
+        paidAt: item.paidAt,
+      }
+      : null,
+  }));
+
+  return res.json({ items: normalizedItems, total, page, pageSize });
+});
+
+router.get("/enterprise-plan/invites/:id/details", async (req, res) => {
+  const invite = await prisma.enterprisePlanInvite.findUnique({
+    where: { id: req.params.id },
+    include: {
+      proposal: true,
+      createdUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          emailVerified: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  if (!invite) {
+    return res.status(404).json({ error: "Invite not found" });
+  }
+
+  const latestSubscription = invite.createdUserId
+    ? await prisma.subscription.findFirst({
+      where: {
+        userId: invite.createdUserId,
+        planCode: invite.planCode,
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        billingCycle: true,
+        priceType: true,
+        stripeSubscriptionId: true,
+        stripeCustomerId: true,
+        currentPeriodStart: true,
+        currentPeriodEnd: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+    : null;
+
+  return res.json({
+    invite: {
+      id: invite.id,
+      email: invite.email,
+      fullName: invite.fullName,
+      companyName: invite.companyName,
+      socialPlatforms: invite.socialPlatforms,
+      planCode: invite.planCode,
+      status: invite.status,
+      expiresAt: invite.expiresAt,
+      viewedAt: invite.viewedAt,
+      signedUpAt: invite.signedUpAt,
+      paidAt: invite.paidAt,
+      sentByAdminEmail: invite.sentByAdminEmail,
+      createdAt: invite.createdAt,
+      updatedAt: invite.updatedAt,
+    },
+    proposal: invite.proposal
+      ? {
+        id: invite.proposal.id,
+        planName: invite.proposal.planName,
+        amount: Number(invite.proposal.amount),
+        billingCycle: invite.proposal.billingCycle,
+        currency: invite.proposal.currency,
+        status: invite.proposal.status,
+        expiresAt: invite.proposal.expiresAt,
+        viewedAt: invite.proposal.viewedAt,
+        signedUpAt: invite.proposal.signedUpAt,
+        paidAt: invite.proposal.paidAt,
+      }
+      : null,
+    user: invite.createdUser,
+    subscription: latestSubscription,
+  });
+});
+
+router.post("/enterprise-plan/invites/:id/resend", async (req, res) => {
+  const invite = await prisma.enterprisePlanInvite.findUnique({
+    where: { id: req.params.id },
+    include: { proposal: true },
+  });
+
+  if (!invite) {
+    return res.status(404).json({ error: "Invite not found" });
+  }
+
+  if (invite.status === EnterpriseInviteStatus.CANCELED) {
+    return res.status(400).json({ error: "Invite is canceled" });
+  }
+  if (
+    invite.status === EnterpriseInviteStatus.SIGNED_UP ||
+    invite.status === EnterpriseInviteStatus.PAYMENT_COMPLETED
+  ) {
+    return res.status(400).json({ error: "Invite already used" });
+  }
+
+  const nextToken = crypto.randomBytes(32).toString("hex");
+  const nextExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  const refreshedInvite = await prisma.enterprisePlanInvite.update({
+    where: { id: invite.id },
+    data: {
+      inviteToken: nextToken,
+      status: EnterpriseInviteStatus.PENDING,
+      viewedAt: null,
+      signedUpAt: null,
+      paidAt: null,
+      expiresAt: nextExpiry,
+    },
+  });
+
+  await prisma.enterprisePlanProposal.update({
+    where: { id: refreshedInvite.proposalId },
+    data: {
+      status: EnterpriseProposalStatus.PENDING,
+      expiresAt: nextExpiry,
+      viewedAt: null,
+      signedUpAt: null,
+      paidAt: null,
+      createdUserId: null,
+    },
+  });
+
+  const emailResult = await sendEnterprisePlanInviteEmail({
+    email: refreshedInvite.email,
+    token: nextToken,
+    planCode: refreshedInvite.planCode,
+    planName: invite.proposal?.planName ?? undefined,
+    amount: invite.proposal ? Number(invite.proposal.amount) : undefined,
+    billingCycle: invite.proposal?.billingCycle === BillingCycle.YEARLY ? "yearly" : "monthly",
+    fullName: refreshedInvite.fullName ?? undefined,
+    companyName: refreshedInvite.companyName ?? undefined,
+  });
+
+  if (!emailResult.sent) {
+    return res.status(500).json({
+      error: "Failed to resend enterprise invite email",
+      details: emailResult.reason,
+    });
+  }
+
+  await createAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "RESEND_VERIFICATION",
+    metadata: {
+      source: "enterprise_invite_resend",
+      inviteId: refreshedInvite.id,
+      email: refreshedInvite.email,
+      planCode: refreshedInvite.planCode,
+    },
+  });
+
+  return res.json({
+    success: true,
+    invite: {
+      id: refreshedInvite.id,
+      status: refreshedInvite.status,
+      expiresAt: refreshedInvite.expiresAt,
+    },
+  });
+});
+
+router.patch("/enterprise-plan/invites/:id/cancel", async (req, res) => {
+  const invite = await prisma.enterprisePlanInvite.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!invite) {
+    return res.status(404).json({ error: "Invite not found" });
+  }
+
+  if (
+    invite.status === EnterpriseInviteStatus.SIGNED_UP ||
+    invite.status === EnterpriseInviteStatus.PAYMENT_COMPLETED
+  ) {
+    return res.status(400).json({ error: "Cannot cancel a used invite" });
+  }
+
+  const updated = await prisma.enterprisePlanInvite.update({
+    where: { id: invite.id },
+    data: { status: EnterpriseInviteStatus.CANCELED },
+  });
+
+  await prisma.enterprisePlanProposal.update({
+    where: { id: updated.proposalId },
+    data: { status: EnterpriseProposalStatus.CANCELED },
+  });
+
+  await createAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "UPDATE_USER",
+    metadata: {
+      source: "enterprise_invite_cancel",
+      inviteId: updated.id,
+      email: updated.email,
+      planCode: updated.planCode,
+    },
+  });
+
+  return res.json({
+    success: true,
+    invite: {
+      id: updated.id,
+      status: updated.status,
+    },
+  });
+});
+
+router.delete("/enterprise-plan/invites/:id/permanent", async (req, res) => {
+  const invite = await prisma.enterprisePlanInvite.findUnique({
+    where: { id: req.params.id },
+    include: {
+      proposal: true,
+    },
+  });
+
+  if (!invite) {
+    return res.status(404).json({ error: "Invite not found" });
+  }
+
+  const planCode = invite.planCode;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.enterprisePlanProposal.delete({
+      where: { id: invite.proposalId },
+    });
+
+    const [subscriptionCount, termCount, quoteCount] = await Promise.all([
+      tx.subscription.count({ where: { planCode } }),
+      tx.planTermsVersion.count({ where: { planCode } }),
+      tx.billingQuote.count({ where: { planCode } }),
+    ]);
+
+    if (subscriptionCount === 0 && termCount === 0 && quoteCount === 0) {
+      await tx.plan.deleteMany({
+        where: {
+          code: planCode,
+          isCustomEnterprise: true,
+        },
+      });
+    }
+  });
+
+  await createAuditLog({
+    actorId: req.user!.id,
+    actorEmail: req.user!.email,
+    action: "DELETE_USER",
+    metadata: {
+      source: "enterprise_invite_permanent_delete",
+      inviteId: invite.id,
+      proposalId: invite.proposalId,
+      planCode,
+      email: invite.email,
+    },
+  });
+
+  return res.json({
+    success: true,
+    message: "Enterprise invite deleted permanently",
+  });
 });
 
 router.post("/users", async (req, res) => {

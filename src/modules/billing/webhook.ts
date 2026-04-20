@@ -4,7 +4,14 @@ import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
 import { stripeClient } from "./stripe";
 import { env } from "../../config/env";
-import { BillingCycle, CouponStatus, PriceType, SubscriptionStatus } from "@prisma/client";
+import {
+  BillingCycle,
+  CouponStatus,
+  EnterpriseInviteStatus,
+  EnterpriseProposalStatus,
+  PriceType,
+  SubscriptionStatus,
+} from "@prisma/client";
 import { mapStripeStatus, toPlanCategory } from "./billing-utils";
 import {
   getActiveSubscription,
@@ -175,9 +182,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripeE
     : BillingCycle.MONTHLY;
   const couponId = metadata.couponId;
   const couponDiscountCents = parseInt(metadata.couponDiscountCents || "0");
+  const enterpriseProposalId = metadata.enterpriseProposalId;
   const termsAcceptedAt = metadata.termsAcceptedAt
     ? new Date(metadata.termsAcceptedAt)
     : new Date();
+  const isEnterpriseCheckout = Boolean(metadata.enterpriseProposalId);
 
   if (metadata.type === "visual_topup") {
     await handleVisualTopupCheckout(session, stripeEventId);
@@ -213,9 +222,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripeE
         expand: ["items.data.price.product"],
       });
       const item = stripeSub.items.data[0];
-      const planInfo = await upsertPlanFromPrice(item?.price as Stripe.Price | undefined);
-      resolvedPlanCode = planInfo?.planCode || planCode;
-      resolvedPriceType = planInfo?.priceType || priceType;
+      if (!isEnterpriseCheckout) {
+        const planInfo = await upsertPlanFromPrice(item?.price as Stripe.Price | undefined);
+        resolvedPlanCode = planInfo?.planCode || planCode;
+        resolvedPriceType = planInfo?.priceType || priceType;
+      } else {
+        resolvedPlanCode = planCode;
+        resolvedPriceType = priceType;
+      }
       const { startUnix, endUnix } = extractStripePeriodBounds(stripeSub);
       currentPeriodStart = startUnix ? new Date(startUnix * 1000) : undefined;
       currentPeriodEnd = endUnix ? new Date(endUnix * 1000) : undefined;
@@ -279,6 +293,24 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripeE
     await tx.processedWebhookEvent.create({
       data: { eventId: stripeEventId, type: "checkout.session.completed" },
     });
+
+    if (enterpriseProposalId) {
+      await tx.enterprisePlanProposal.updateMany({
+        where: { id: enterpriseProposalId },
+        data: {
+          status: EnterpriseProposalStatus.PAYMENT_COMPLETED,
+          paidAt: new Date(),
+        },
+      });
+
+      await tx.enterprisePlanInvite.updateMany({
+        where: { proposalId: enterpriseProposalId },
+        data: {
+          status: EnterpriseInviteStatus.PAYMENT_COMPLETED,
+          paidAt: new Date(),
+        },
+      });
+    }
 
     if (subscription) {
       // Update existing subscription

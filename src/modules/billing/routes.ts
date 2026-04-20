@@ -1,6 +1,6 @@
 import express from "express";
 import Stripe from "stripe";
-import { BillingCycle, CouponStatus, PriceType, SubscriptionStatus } from "@prisma/client";
+import { BillingCycle, CouponStatus, EnterpriseProposalStatus, PriceType, SubscriptionStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth } from "../../middleware/requireAuth";
@@ -390,8 +390,8 @@ router.post("/checkout", requireAuth, async (req, res) => {
   const videoAddonEnabled = videoSessionHours > 0;
   const termsAcceptedAt = new Date();
   const normalizedPlanCode = planCode.trim().toUpperCase();
-  const interval = billingCycle === "yearly" ? "year" : "month";
-  const billingCycleEnum = billingCycle === "yearly" ? BillingCycle.YEARLY : BillingCycle.MONTHLY;
+  let interval: "month" | "year" = billingCycle === "yearly" ? "year" : "month";
+  let billingCycleEnum = billingCycle === "yearly" ? BillingCycle.YEARLY : BillingCycle.MONTHLY;
   const nyTaxRateId = env.STRIPE_NY_SALES_TAX_RATE_ID;
 
   if (!nyTaxRateId) {
@@ -407,11 +407,23 @@ router.post("/checkout", requireAuth, async (req, res) => {
   }
 
   const planFromDb = await prisma.plan.findUnique({ where: { code: normalizedPlanCode } });
+  const enterpriseProposal = planFromDb?.isCustomEnterprise
+    ? await prisma.enterprisePlanProposal.findUnique({ where: { planCode: normalizedPlanCode } })
+    : null;
+
+  if (planFromDb?.isCustomEnterprise && !enterpriseProposal) {
+    return res.status(404).json({ error: "Enterprise proposal not found" });
+  }
+
+  if (enterpriseProposal) {
+    billingCycleEnum = enterpriseProposal.billingCycle;
+    interval = enterpriseProposal.billingCycle === BillingCycle.YEARLY ? "year" : "month";
+  }
 
   let product: Stripe.Product | null = null;
   let defaultPrice: Stripe.Price | null = null;
 
-  if (planFromDb?.stripePriceStandardId) {
+  if (!planFromDb?.isCustomEnterprise && planFromDb?.stripePriceStandardId) {
     try {
       const dbPrice = await stripeClient.prices.retrieve(planFromDb.stripePriceStandardId, {
         expand: ["product"],
@@ -446,72 +458,75 @@ router.post("/checkout", requireAuth, async (req, res) => {
     defaultPrice = (product?.default_price as Stripe.Price | null) || null;
   }
 
-  if (!product) {
-    return res.status(404).json({ error: "Plan not found" });
-  }
-
-  if (!defaultPrice) {
-    return res.status(400).json({ error: "Plan has no price configured" });
-  }
-
-  const standardMonthlyPrice = await resolveStandardMonthlyPrice({
-    product,
-    fallbackPrice: defaultPrice,
-    planStandardCents: planFromDb?.priceStandardCents,
-  });
-  if (!standardMonthlyPrice) {
-    return res.status(400).json({ error: "Plan has no monthly standard price configured" });
-  }
-
-  let price: Stripe.Price = standardMonthlyPrice;
-  if (interval === "year") {
-    try {
-      price = await resolveOrCreateYearlyPrice({
-        product,
-        defaultPrice: standardMonthlyPrice,
-        normalizedPlanCode,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Yearly billing is not available for this plan.";
-      return res.status(400).json({
-        error: `${message} Please choose monthly.`,
-      });
+  const isCustomEnterprisePlan = Boolean(planFromDb?.isCustomEnterprise);
+  if (!isCustomEnterprisePlan) {
+    if (!product) {
+      return res.status(404).json({ error: "Plan not found" });
     }
-  }
 
-  const userId = req.user!.id;
-  const eligibleForFounder = await isFounderEligible(userId);
-  const priceType = eligibleForFounder ? PriceType.FOUNDER : PriceType.STANDARD;
+    if (!defaultPrice) {
+      return res.status(400).json({ error: "Plan has no price configured" });
+    }
 
-  const couponResult = await resolveApplicableCoupon({
-    couponCode: parsed.data.couponCode,
-    userId,
-    normalizedPlanCode,
-  });
-  if (couponResult.error) {
-    return res.status(400).json({ error: couponResult.error });
-  }
-  const applicableCoupon = couponResult.coupon;
+    const standardMonthlyPrice = await resolveStandardMonthlyPrice({
+      product,
+      fallbackPrice: defaultPrice,
+      planStandardCents: planFromDb?.priceStandardCents,
+    });
+    if (!standardMonthlyPrice) {
+      return res.status(400).json({ error: "Plan has no monthly standard price configured" });
+    }
 
-  let priceId = price.id;
+    let price: Stripe.Price = standardMonthlyPrice;
+    if (interval === "year") {
+      try {
+        price = await resolveOrCreateYearlyPrice({
+          product,
+          defaultPrice: standardMonthlyPrice,
+          normalizedPlanCode,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Yearly billing is not available for this plan.";
+        return res.status(400).json({
+          error: `${message} Please choose monthly.`,
+        });
+      }
+    }
 
-  // Ensure plan exists in local DB for FK (always use monthly/default price for plan record)
-  const planPayload = {
-    code: normalizedPlanCode,
-    name: product.name,
-    category: toPlanCategory(product.metadata.category),
-    isJewelry: (product.metadata.isJewelry || "").toLowerCase() === "true",
-    platformLimit: product.metadata.platformLimit ? parseInt(product.metadata.platformLimit) : null,
-    baseVisualQuota: product.metadata.baseVisualQuota ? parseInt(product.metadata.baseVisualQuota) : null,
-    basePostQuota: product.metadata.basePostQuota ? parseInt(product.metadata.basePostQuota) : null,
-    postLimitType: toPostLimitType(product.metadata.postLimitType),
-    schedulerRole: toSchedulerRole(product.metadata.schedulerRole),
-    priceStandardCents: standardMonthlyPrice.unit_amount ?? 0,
-    priceFounderCents: product.metadata.priceFounderCents
-      ? parseInt(product.metadata.priceFounderCents)
-      : standardMonthlyPrice.unit_amount ?? 0,
-    stripePriceStandardId: standardMonthlyPrice.id,
-  };
+    const userId = req.user!.id;
+    const eligibleForFounder = await isFounderEligible(userId);
+    const priceType = eligibleForFounder ? PriceType.FOUNDER : PriceType.STANDARD;
+
+    const couponResult = await resolveApplicableCoupon({
+      couponCode: parsed.data.couponCode,
+      userId,
+      normalizedPlanCode,
+    });
+    if (couponResult.error) {
+      return res.status(400).json({ error: couponResult.error });
+    }
+    const applicableCoupon = couponResult.coupon;
+
+    let priceId = price.id;
+
+    // Ensure plan exists in local DB for FK (always use monthly/default price for plan record)
+    const planPayload = {
+      code: normalizedPlanCode,
+      name: product.name,
+      category: toPlanCategory(product.metadata.category),
+      isCustomEnterprise: false,
+      isJewelry: (product.metadata.isJewelry || "").toLowerCase() === "true",
+      platformLimit: product.metadata.platformLimit ? parseInt(product.metadata.platformLimit) : null,
+      baseVisualQuota: product.metadata.baseVisualQuota ? parseInt(product.metadata.baseVisualQuota) : null,
+      basePostQuota: product.metadata.basePostQuota ? parseInt(product.metadata.basePostQuota) : null,
+      postLimitType: toPostLimitType(product.metadata.postLimitType),
+      schedulerRole: toSchedulerRole(product.metadata.schedulerRole),
+      priceStandardCents: price.unit_amount ?? 0,
+      priceFounderCents: product.metadata.priceFounderCents
+        ? parseInt(product.metadata.priceFounderCents)
+        : price.unit_amount ?? 0,
+      stripePriceStandardId: price.id,
+    };
 
   await prisma.plan.upsert({
     where: { code: normalizedPlanCode },
@@ -520,8 +535,8 @@ router.post("/checkout", requireAuth, async (req, res) => {
   });
 
   // Check if user has an active subscription to a different plan
-  const activeSubscription = await getActiveSubscription(userId);
-  const isPlanSwitch = activeSubscription && activeSubscription.planCode !== normalizedPlanCode;
+    const activeSubscription = await getActiveSubscription(userId);
+    const isPlanSwitch = activeSubscription && activeSubscription.planCode !== normalizedPlanCode;
 
   // Handle plan switching: cancel old subscription in Stripe if switching plans
   // OR cancel default/free plan subscriptions (those without Stripe subscription ID)
@@ -905,16 +920,201 @@ router.post("/checkout", requireAuth, async (req, res) => {
     description: `Plan ${normalizedPlanCode} (${billingCycle})`,
   }).catch(() => {});
 
+    return res.json({
+      checkoutUrl: session.url,
+      priceType,
+      cart: {
+        planCode: normalizedPlanCode,
+        billingCycle,
+        subtotalCents,
+        couponCode: applicableCoupon?.code ?? null,
+        couponDiscountCents,
+        discountedSubtotalCents,
+        taxRatePercent: 8.625,
+        estimatedTaxCents,
+        estimatedTotalCents,
+        addonPlatformQty,
+        videoSessionHours,
+      },
+    });
+  }
+
+  const userId = req.user!.id;
+  const proposal = enterpriseProposal!;
+
+  if (proposal.status === EnterpriseProposalStatus.PAYMENT_COMPLETED) {
+    return res.status(409).json({
+      success: false,
+      message: "Enterprise plan payment is already completed",
+      planCode: normalizedPlanCode,
+    });
+  }
+
+  const priceType = PriceType.STANDARD;
+  const quotedAmountCents = Math.round(Number(proposal.amount) * 100);
+
+  const activeSubscription = await getActiveSubscription(userId);
+  const isPlanSwitch = activeSubscription && activeSubscription.planCode !== normalizedPlanCode;
+
+  if (isPlanSwitch) {
+    if (!activeSubscription.stripeSubscriptionId) {
+      await prisma.subscription.update({
+        where: { id: activeSubscription.id },
+        data: {
+          status: SubscriptionStatus.CANCELED,
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.subscription.update({
+        where: { id: activeSubscription.id },
+        data: {
+          status: SubscriptionStatus.CANCELED,
+          updatedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  const existingSubscription = await prisma.subscription.findFirst({
+    where: { userId, status: SubscriptionStatus.INCOMPLETE },
+    orderBy: { createdAt: "desc" },
+  });
+
+  let stripeCustomerId: string | undefined;
+  if (existingSubscription?.stripeCustomerId) {
+    stripeCustomerId = existingSubscription.stripeCustomerId;
+  } else {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user?.email) {
+      try {
+        const customer = await stripeClient.customers.create({
+          email: user.email,
+          metadata: { userId },
+        });
+        stripeCustomerId = customer.id;
+      } catch (error) {
+        logger.error("Failed to create Stripe customer", error);
+      }
+    }
+  }
+
+  let subscriptionRecord;
+  if (existingSubscription && !isPlanSwitch) {
+    subscriptionRecord = await prisma.subscription.update({
+      where: { id: existingSubscription.id },
+      data: {
+        planCode: normalizedPlanCode,
+        priceType,
+        billingCycle: proposal.billingCycle,
+        status: SubscriptionStatus.INCOMPLETE,
+        stripeCustomerId: stripeCustomerId || existingSubscription.stripeCustomerId,
+        termsAcceptedAt,
+        addonPlatformQty,
+        videoAddonEnabled,
+        videoSessionHours,
+        updatedAt: new Date(),
+      },
+    });
+  } else {
+    subscriptionRecord = await prisma.subscription.create({
+      data: {
+        userId,
+        planCode: normalizedPlanCode,
+        priceType,
+        billingCycle: proposal.billingCycle,
+        status: SubscriptionStatus.INCOMPLETE,
+        stripeCustomerId,
+        termsAcceptedAt,
+        addonPlatformQty,
+        videoAddonEnabled,
+        videoSessionHours,
+      },
+    });
+  }
+
+  const session = await stripeClient.checkout.sessions.create({
+    mode: "subscription",
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          recurring: { interval: proposal.billingCycle === BillingCycle.YEARLY ? "year" : "month" },
+          unit_amount: quotedAmountCents,
+          product_data: {
+            name: proposal.planName,
+            description: `Custom enterprise plan for ${proposal.companyName}`,
+          },
+        },
+        quantity: 1,
+        tax_rates: [nyTaxRateId],
+      },
+    ],
+    ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
+    ...(stripeCustomerId ? { customer_update: { address: "auto", name: "auto" } } : {}),
+    billing_address_collection: "required",
+    success_url: `${env.FRONTEND_URL}/billing/success`,
+    cancel_url: `${env.FRONTEND_URL}/billing/cancel`,
+    subscription_data: {
+      metadata: {
+        userId,
+        planCode: normalizedPlanCode,
+        priceType,
+        subscriptionId: subscriptionRecord.id,
+        billingCycle: proposal.billingCycle === BillingCycle.YEARLY ? "yearly" : "monthly",
+        termsAcceptedAt: termsAcceptedAt.toISOString(),
+        addonPlatformQty: addonPlatformQty.toString(),
+        videoAddonEnabled: videoAddonEnabled.toString(),
+        videoSessionHours: videoSessionHours.toString(),
+        enterpriseProposalId: proposal.id,
+        enterpriseProposalPriceCents: quotedAmountCents.toString(),
+      },
+    },
+    metadata: {
+      userId,
+      planCode: normalizedPlanCode,
+      priceType,
+      subscriptionId: subscriptionRecord.id,
+      billingCycle: proposal.billingCycle === BillingCycle.YEARLY ? "yearly" : "monthly",
+      termsAcceptedAt: termsAcceptedAt.toISOString(),
+      addonPlatformQty: addonPlatformQty.toString(),
+      videoAddonEnabled: videoAddonEnabled.toString(),
+      videoSessionHours: videoSessionHours.toString(),
+      enterpriseProposalId: proposal.id,
+      enterpriseProposalPriceCents: quotedAmountCents.toString(),
+    },
+  });
+
+  await prisma.enterprisePlanProposal.update({
+    where: { id: proposal.id },
+    data: {
+      ...(proposal.status === EnterpriseProposalStatus.PENDING
+        ? { status: EnterpriseProposalStatus.VIEWED }
+        : {}),
+      ...(proposal.viewedAt ? {} : { viewedAt: new Date() }),
+    },
+  });
+
+  const estimatedTaxCents = Math.round((quotedAmountCents * NY_SALES_TAX_BPS) / 10_000);
+  const estimatedTotalCents = quotedAmountCents + estimatedTaxCents;
+
+  logActivity({
+    userId,
+    type: "SUBSCRIPTION_CHECKOUT_STARTED",
+    title: "Subscription Checkout Started",
+    description: `Enterprise plan ${proposal.planName} (${proposal.billingCycle.toLowerCase()})`,
+  }).catch(() => {});
+
   return res.json({
     checkoutUrl: session.url,
     priceType,
     cart: {
       planCode: normalizedPlanCode,
-      billingCycle,
-      subtotalCents,
-      couponCode: applicableCoupon?.code ?? null,
-      couponDiscountCents,
-      discountedSubtotalCents,
+      billingCycle: proposal.billingCycle === BillingCycle.YEARLY ? "yearly" : "monthly",
+      subtotalCents: quotedAmountCents,
+      couponCode: null,
+      couponDiscountCents: 0,
+      discountedSubtotalCents: quotedAmountCents,
       taxRatePercent: 8.625,
       estimatedTaxCents,
       estimatedTotalCents,
@@ -1372,7 +1572,7 @@ router.get("/current-plan", requireAuth, async (req, res) => {
   try {
     const userId = req.user!.id;
 
-    const activeSubscription = await prisma.subscription.findFirst({
+    let activeSubscription = await prisma.subscription.findFirst({
       where: {
         userId,
         status: {
@@ -1386,6 +1586,52 @@ router.get("/current-plan", requireAuth, async (req, res) => {
         updatedAt: "desc",
       },
     });
+
+    if (!activeSubscription) {
+      const latestSubscription = await prisma.subscription.findFirst({
+        where: { userId },
+        include: { plan: true },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      if (latestSubscription && stripeClient && latestSubscription.stripeSubscriptionId) {
+        try {
+          const stripeSub = await stripeClient.subscriptions.retrieve(latestSubscription.stripeSubscriptionId, {
+            expand: ["schedule"],
+          });
+          const stripeStatus = stripeSub.status;
+          const nextStatus =
+            stripeStatus === "active"
+              ? SubscriptionStatus.ACTIVE
+              : stripeStatus === "trialing"
+                ? SubscriptionStatus.TRIALING
+                : stripeStatus === "past_due"
+                  ? SubscriptionStatus.PAST_DUE
+                  : stripeStatus === "canceled" || stripeStatus === "incomplete_expired"
+                    ? SubscriptionStatus.CANCELED
+                    : latestSubscription.status;
+
+          if (nextStatus !== latestSubscription.status) {
+            activeSubscription = await prisma.subscription.update({
+              where: { id: latestSubscription.id },
+              data: {
+                status: nextStatus,
+                updatedAt: new Date(),
+              },
+              include: { plan: true },
+            });
+          } else if (stripeStatus === "active" || stripeStatus === "trialing") {
+            activeSubscription = latestSubscription;
+          }
+        } catch (error) {
+          logger.warn("Unable to recover enterprise current-plan from Stripe", {
+            userId,
+            subscriptionId: latestSubscription.id,
+            error,
+          });
+        }
+      }
+    }
 
     if (!activeSubscription) {
       return res.status(404).json({
@@ -1615,7 +1861,7 @@ router.get("/history", requireAuth, async (req, res) => {
     const userId = req.user!.id;
 
     // Get current active subscription
-    const currentSubscription = await prisma.subscription.findFirst({
+    let currentSubscription = await prisma.subscription.findFirst({
       where: {
         userId,
         status: {
@@ -1629,6 +1875,56 @@ router.get("/history", requireAuth, async (req, res) => {
         updatedAt: "desc",
       },
     });
+
+    if (!currentSubscription) {
+      const latestSubscription = await prisma.subscription.findFirst({
+        where: { userId },
+        include: {
+          plan: true,
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+      });
+
+      if (latestSubscription && stripeClient && latestSubscription.stripeSubscriptionId) {
+        try {
+          const stripeSub = await stripeClient.subscriptions.retrieve(latestSubscription.stripeSubscriptionId);
+          const stripeStatus = stripeSub.status;
+          const nextStatus =
+            stripeStatus === "active"
+              ? SubscriptionStatus.ACTIVE
+              : stripeStatus === "trialing"
+                ? SubscriptionStatus.TRIALING
+                : stripeStatus === "past_due"
+                  ? SubscriptionStatus.PAST_DUE
+                  : stripeStatus === "canceled" || stripeStatus === "incomplete_expired"
+                    ? SubscriptionStatus.CANCELED
+                    : latestSubscription.status;
+
+          if (nextStatus !== latestSubscription.status) {
+            currentSubscription = await prisma.subscription.update({
+              where: { id: latestSubscription.id },
+              data: {
+                status: nextStatus,
+                updatedAt: new Date(),
+              },
+              include: { plan: true },
+            });
+          } else if (stripeStatus === "active" || stripeStatus === "trialing") {
+            currentSubscription = latestSubscription;
+          }
+        } catch (error) {
+          logger.warn("Unable to recover enterprise history subscription from Stripe", {
+            userId,
+            subscriptionId: latestSubscription.id,
+            error,
+          });
+        }
+      } else if (latestSubscription && latestSubscription.plan?.isCustomEnterprise) {
+        currentSubscription = latestSubscription;
+      }
+    }
 
     // Get all subscriptions (both active and past)
     const allSubscriptions = await prisma.subscription.findMany({
