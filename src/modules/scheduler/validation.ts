@@ -25,7 +25,7 @@ export const schedulerCreatePostSchema = z.object({
   cta: z.string().max(280).nullable().optional(),
   shortDescription: z.string().max(500).nullable().optional(),
   scheduledAt: dateTimeString("scheduledAt"),
-  socialAccountIds: z.array(z.string().min(1)).min(1),
+  socialAccountIds: z.array(z.string().min(1)).min(1).optional(),
   adminReason: z.string().max(500).nullable().optional(),
 });
 

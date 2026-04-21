@@ -194,6 +194,7 @@ router.get("/posts/:id", async (req, res) => {
   }
 });
 
+// Admin-only endpoint to update publish status of a post (e.g. mark as posted, failed, etc.)
 router.patch("/posts/:id/publish-status", requireAdmin, async (req, res) => {
   const parsed = schedulerPublishStatusSchema.safeParse(req.body);
   if (!parsed.success) {

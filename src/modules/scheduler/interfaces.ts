@@ -17,7 +17,7 @@ export type SchedulerCreateInput = {
   cta?: string | null;
   shortDescription?: string | null;
   scheduledAt: Date;
-  socialAccountIds: string[];
+  socialAccountIds?: string[];
   uploadedAssetIds?: string[];
   adminReason?: string | null;
 };
